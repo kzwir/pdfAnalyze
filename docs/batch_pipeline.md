@@ -1,460 +1,279 @@
-# Batch Pipeline
-
-## Cel modułu
-
-Moduł `batch_pipeline.py` odpowiada za wsadowe przetwarzanie dokumentów PDF oraz integrację całego procesu ekstrakcji danych i generowania dokumentów Microsoft Word.
-
-Jest głównym punktem wejścia aplikacji. Zarządza analizą dokumentów PDF, uruchamianiem pipeline ekstrakcji, wyborem trybu pracy, obsługą przetwarzania równoległego, zapisem wyników oraz generowaniem raportów końcowych.
-
-Moduł integruje następujące komponenty:
-
-- `checkpdf_module.py`
-- `tableimport.py`
-- `pdf2word_module.py`
-- `metrics.py`
-
----
-
-# Miejsce modułu w architekturze systemu
-
-```text
-PDF
- ↓
-checkpdf_module.py
- ↓
-tableimport.py
- ↓
-EngineManager
- ↓
-PdfPlumberEngine / CamelotEngine / OCREngine
- ↓
-pdf2word_module.py
- ↓
-DOCX
-```
-
-Moduł pełni rolę koordynatora procesu i zarządza przepływem danych oraz wyników pomiędzy wszystkimi elementami systemu.
-
----
-
 # Architektura modułu
 
-```text
+## Odpowiedzialność modułu
+
+Moduł `batch_pipeline.py` pełni rolę głównego koordynatora procesu wsadowego przetwarzania dokumentów PDF.
+
+Odpowiada za:
+
+- wyszukiwanie dokumentów PDF w katalogu wejściowym,
+- uruchamianie procesu przetwarzania,
+- wybór trybu pracy (`single`, `merged`, `grouped`),
+- koordynację przepływu danych pomiędzy modułami,
+- obsługę multiprocessing,
+- obsługę retry,
+- agregację wyników,
+- generowanie dashboardu,
+- zapis raportu JSON,
+- rejestrowanie przebiegu procesu.
+
+Moduł nie odpowiada za:
+
+- analizę struktury dokumentów PDF,
+- ekstrakcję tabel,
+- wykonywanie OCR,
+- wybór algorytmu ekstrakcji,
+- generowanie zawartości dokumentów DOCX.
+
+Powyższe zadania są realizowane przez wyspecjalizowane moduły projektu.
+
+---
+
+## Publiczne API modułu
+
+Funkcją przeznaczoną do wykorzystania przez inne moduły projektu jest:
+
+```python
 run_batch()
-    │
-    ├── process_single()
-    │
-    ├── process_with_retry()
-    │
-    ├── run_merged()
-    │
-    ├── run_grouped()
-    │
-    ├── print_dashboard()
-    │
-    └── dashboard.json
+```
+
+Jest to główny punkt wejścia aplikacji.
+
+W większości przypadków pozostałe moduły powinny korzystać wyłącznie z tej funkcji zamiast bezpośrednio wywoływać funkcje pomocnicze.
+
+---
+
+## Funkcje wewnętrzne
+
+Poniższe funkcje są wykorzystywane przez `run_batch()` i stanowią implementację wewnętrzną modułu:
+
+```python
+setup_logging()
+process_single()
+process_with_retry()
+run_merged()
+run_grouped()
+print_dashboard()
+main()
+```
+
+Funkcje te nie zostały zaprojektowane jako publiczny interfejs integracyjny.
+
+---
+
+# Wejście i wyjście
+
+## Dane wejściowe
+
+Moduł oczekuje katalogu zawierającego pliki PDF.
+
+Przykład:
+
+```text
+input/
+├── 0.pdf
+├── 1.pdf
+├── 2.pdf
+└── ...
+```
+
+Każdy odnaleziony plik PDF zostaje przekazany do procesu analizy i ekstrakcji danych.
+
+---
+
+## Dane wyjściowe
+
+### Tryb `single`
+
+Dla każdego dokumentu PDF tworzony jest osobny dokument DOCX.
+
+```text
+output/
+├── 0.docx
+├── 1.docx
+├── 2.docx
+└── ...
+```
+
+### Tryb `merged`
+
+Wszystkie dokumenty PDF trafiają do jednego wspólnego dokumentu DOCX.
+
+```text
+output/
+└── wynik_zbiorczy.docx
+```
+
+### Tryb `grouped`
+
+Dokumenty PDF są grupowane zgodnie z wartością parametru:
+
+```python
+group_size
+```
+
+Przykład:
+
+```text
+output/
+├── part_001.docx
+├── part_002.docx
+└── part_003.docx
 ```
 
 ---
 
-# Diagram przepływu danych
+## Dodatkowe artefakty
 
-## Tryb single
+Po zakończeniu pracy moduł generuje również:
 
 ```text
-PDF
- ↓
-analyze_file()
- ↓
-run_pipeline_with_metrics()
- ↓
-DOCX
- ↓
-Metrics
- ↓
-Dashboard
+dashboard.json
 ```
 
-## Tryb merged
+oraz:
 
 ```text
-PDF1
-PDF2
-PDF3
- ...
-PDFN
- ↓
-run_pipeline_with_metrics()
- ↓
-Document
- ↓
-wynik_zbiorczy.docx
-```
-
-## Tryb grouped
-
-```text
-PDF
- ↓
-Grouping
- ↓
-Document
- ↓
-part_001.docx
-
-Document
- ↓
-part_002.docx
+batch.log
 ```
 
 ---
 
-# Opis działania modułu
+# Tabela funkcji modułu
 
-Moduł skanuje katalog wejściowy i wyszukuje wszystkie pliki PDF.
-
-Każdy dokument jest analizowany za pomocą funkcji `analyze_file()` z modułu `checkpdf_module.py`. Jeżeli dokument jest poprawny, zostaje przekazany do funkcji `run_pipeline_with_metrics()` odpowiedzialnej za ekstrakcję danych.
-
-W zależności od wybranego trybu pracy moduł:
-
-- tworzy osobny dokument DOCX dla każdego PDF,
-- scala wszystkie PDF do jednego dokumentu DOCX,
-- grupuje PDF do wielu dokumentów DOCX.
-
-Po zakończeniu pracy generowany jest dashboard i raport JSON.
+| Funkcja | Przeznaczenie |
+|----------|----------|
+| `setup_logging()` | Konfiguracja systemu logowania |
+| `process_single()` | Przetwarzanie pojedynczego dokumentu PDF |
+| `process_with_retry()` | Obsługa retry dla pojedynczego dokumentu |
+| `run_merged()` | Scalanie wielu PDF do jednego DOCX |
+| `run_grouped()` | Grupowanie PDF do wielu dokumentów DOCX |
+| `print_dashboard()` | Prezentacja statystyk procesu |
+| `run_batch()` | Główny punkt wejścia modułu |
+| `main()` | Interfejs CLI |
 
 ---
 
-# Struktura katalogów
+# Zależności między modułami
 
 ```text
-project/
+batch_pipeline.py
 │
-├── input/
-│   ├── 0.pdf
-│   ├── 1.pdf
-│   └── ...
-│
-├── output/
-│
-├── batch_pipeline.py
 ├── checkpdf_module.py
+│     └── analiza dokumentów PDF
+│
 ├── tableimport.py
-├── pdf2word_module.py
+│     └── ekstrakcja danych
+│
 ├── metrics.py
-├── parallel_pipeline.py
+│     └── agregacja wyników i statystyk
 │
-├── engines/
-│   ├── pdfplumber_engine.py
-│   ├── camelot_engine.py
-│   └── ocr_engine.py
-│
-├── dashboard.json
-├── batch.log
-│
-└── templates/
-    └── szablon.docx
+└── pdf2word_module.py
+      └── tworzenie dokumentów DOCX
 ```
 
 ---
 
-# Funkcje modułu
+# Dane przekazywane pomiędzy modułami
 
-# setup_logging()
+## checkpdf_module.py → batch_pipeline.py
 
-## Przeznaczenie
-
-Konfiguruje system logowania wykorzystywany przez cały moduł.
-
-Tworzy konfigurację pliku logów `batch.log` oraz ustawia poziom logowania `INFO`.
-
-Funkcja jest uruchamiana przez interfejs CLI przed rozpoczęciem przetwarzania danych.
-
-## Sygnatura
+Wywołanie:
 
 ```python
-setup_logging()
+result = analyze_file(pdf_path)
 ```
 
-## Parametry
-
-Brak.
-
-## Wartości zwracane
-
-Brak.
-
-## Przepływ działania
-
-```text
-setup_logging()
- ↓
-logging.basicConfig()
- ↓
-batch.log
-```
-
-## Obsługa błędów
-
-Funkcja nie implementuje własnej obsługi wyjątków.
-
-## Przykład użycia
-
-```python
-setup_logging()
-```
-
-## Przykładowy wynik
-
-```text
-batch.log
-```
-
-## Kiedy używać
-
-Funkcję należy wywołać przed rozpoczęciem przetwarzania dokumentów PDF. Zapewnia ona jednolity mechanizm diagnostyczny dla wszystkich funkcji modułu.
-
----
-
-# process_single()
-
-## Przeznaczenie
-
-Przetwarza pojedynczy dokument PDF.
-
-Jest podstawową jednostką pracy wykorzystywaną przez multiprocessing. Wykonuje analizę dokumentu, uruchamia pipeline ekstrakcji danych i zwraca statystyki wykonania.
-
-## Sygnatura
-
-```python
-process_single(args)
-```
-
-## Parametry
-
-### args
-
-```python
-(
-    pdf_path,
-    template_path,
-    output_dir
-)
-```
-
-### pdf_path
-
-Typ:
-
-```python
-str
-```
-
-Ścieżka do dokumentu PDF.
-
-### template_path
-
-Typ:
-
-```python
-str
-```
-
-Ścieżka do szablonu DOCX.
-
-### output_dir
-
-Typ:
-
-```python
-str
-```
-
-Katalog wynikowy.
-
-## Wartości zwracane
-
-### Sukces
+Przykładowy wynik:
 
 ```python
 {
-    "file": "input/report.pdf",
-    "status": "ok",
+    "valid_pdf": True,
+    "pages": 12,
+    "type": "tekstowy"
+}
+```
+
+Wykorzystywane są następujące pola:
+
+```python
+result["valid_pdf"]
+result["pages"]
+result["type"]
+```
+
+Informacje te decydują o dalszym przebiegu procesu.
+
+---
+
+## batch_pipeline.py → tableimport.py
+
+Wywołanie:
+
+```python
+run_pipeline_with_metrics(
+    pdf_path=pdf_path,
+    template_path=template_path,
+    output_path=output_path,
+    pdf_type=result["type"],
+    pages=pages,
+    forced_engine="auto",
+    parallel=(pages > 10)
+)
+```
+
+Przekazywane są:
+
+- ścieżka dokumentu PDF,
+- ścieżka szablonu DOCX,
+- ścieżka dokumentu wynikowego,
+- typ dokumentu PDF,
+- liczba stron,
+- informacja o pracy równoległej.
+
+---
+
+## tableimport.py → batch_pipeline.py
+
+Odbierane są informacje o przebiegu procesu ekstrakcji:
+
+```python
+{
     "engine": "pdfplumber",
-    "tables_total": 5,
-    "tables_valid": 5,
-    "time": 1.82
+    "tables_total": 6,
+    "tables_valid": 6
 }
 ```
 
-### Błąd
-
-```python
-{
-    "file": "input/report.pdf",
-    "status": "error",
-    "reason": "invalid_pdf"
-}
-```
-
-## Przepływ działania
-
-```text
-PDF
- ↓
-analyze_file()
- ↓
-run_pipeline_with_metrics()
- ↓
-DOCX
- ↓
-metrics
-```
-
-## Obsługa błędów
-
-Przechwytywane są wszystkie wyjątki:
-
-```python
-except Exception as e
-```
-
-W przypadku błędu funkcja:
-
-- zapisuje wpis do logów,
-- zwraca status `error`.
-
-## Przykład użycia
-
-```python
-result = process_single(
-    (
-        "input/report.pdf",
-        "templates/template.docx",
-        "output"
-    )
-)
-```
-
-## Przykładowy wynik
-
-```python
-{
-    "file": "input/report.pdf",
-    "status": "ok",
-    "engine": "pdfplumber",
-    "tables_total": 4,
-    "tables_valid": 4,
-    "time": 1.65
-}
-```
-
-## Kiedy używać
-
-Funkcja jest przydatna podczas debugowania pipeline lub testowania pojedynczych dokumentów. Pozwala uruchomić pełne przetwarzanie bez konieczności przetwarzania całych katalogów.
+Wyniki te są przekazywane do systemu metryk.
 
 ---
 
-# process_with_retry()
+# Artefakty generowane przez moduł
 
-## Przeznaczenie
+## Dokumenty DOCX
 
-Uruchamia przetwarzanie pojedynczego dokumentu PDF z mechanizmem ponownych prób.
-
-Wykorzystuje funkcję `process_single()` i automatycznie ponawia operację w przypadku niepowodzenia.
-
-## Sygnatura
-
-```python
-process_with_retry(
-    args,
-    retries=2
-)
-```
-
-## Parametry
-
-| Parametr | Typ | Opis |
-|-----------|-----------|-----------|
-| args | tuple | Parametry wejściowe dla process_single() |
-| retries | int | Liczba ponownych prób |
-
-## Przepływ działania
+Tworzone są w katalogu:
 
 ```text
-process_single()
- ↓
-error
- ↓
-retry
- ↓
-process_single()
- ↓
-success lub error
+output/
 ```
 
-## Przykład użycia
-
-```python
-result = process_with_retry(
-    (
-        "input/example.pdf",
-        "templates/template.docx",
-        "output"
-    ),
-    retries=3
-)
-```
-
-## Przykładowy wynik
-
-```python
-{
-    "status": "ok",
-    "engine": "pdfplumber"
-}
-```
-
-## Kiedy używać
-
-Funkcja jest zalecana podczas pracy produkcyjnej, gdy ważna jest odporność procesu na chwilowe błędy lub problemy z plikami wejściowymi.
-
----
-
-# Tryby pracy
-
-## single
-
-Dla każdego PDF tworzony jest osobny dokument DOCX.
+Przykłady:
 
 ```text
-0.pdf → 0.docx
-1.pdf → 1.docx
-2.pdf → 2.docx
+0.docx
+1.docx
+2.docx
 ```
 
-## merged
-
-Wszystkie dokumenty PDF są łączone w jeden dokument Word.
+lub:
 
 ```text
-0.pdf
-1.pdf
-2.pdf
- ↓
 wynik_zbiorczy.docx
 ```
 
-## grouped
-
-PDF są grupowane do wielu dokumentów DOCX.
-
-```text
-25 PDF
-group_size = 10
-```
-
-Wynik:
+lub:
 
 ```text
 part_001.docx
@@ -464,7 +283,218 @@ part_003.docx
 
 ---
 
-# Multiprocessing
+## dashboard.json
+
+Raport podsumowujący proces.
+
+Przechowuje:
+
+- liczbę plików PDF,
+- liczbę błędów,
+- współczynnik sukcesu,
+- jakość ekstrakcji,
+- czasy wykonania,
+- wykorzystanie silników.
+
+---
+
+## batch.log
+
+Centralny log działania modułu.
+
+Zawiera:
+
+- rozpoczęcie procesu,
+- zakończenie procesu,
+- retry,
+- informacje diagnostyczne,
+- błędy,
+- wyniki przetwarzania.
+
+---
+
+# Integracja z Metrics
+
+Moduł wykorzystuje klasę:
+
+```python
+Metrics
+```
+
+Tworzenie obiektu:
+
+```python
+metrics = Metrics()
+```
+
+Dodawanie wyników:
+
+```python
+metrics.add_result(result)
+```
+
+Generowanie podsumowania:
+
+```python
+summary = metrics.summary()
+```
+
+Wynik podsumowania jest wykorzystywany do:
+
+- wyświetlenia dashboardu,
+- wygenerowania raportu JSON,
+- obliczenia statystyk jakości.
+
+### Przepływ danych
+
+```text
+process_single()
+        ↓
+result
+        ↓
+metrics.add_result()
+        ↓
+Metrics.summary()
+        ↓
+summary
+        ↓
+print_dashboard()
+        ↓
+dashboard.json
+```
+
+---
+
+# Sekwencja wykonania
+
+Typowy przebieg procesu:
+
+```text
+main()
+ ↓
+setup_logging()
+ ↓
+run_batch()
+ ↓
+process_with_retry()
+ ↓
+process_single()
+ ↓
+analyze_file()
+ ↓
+run_pipeline_with_metrics()
+ ↓
+Metrics.add_result()
+ ↓
+Metrics.summary()
+ ↓
+print_dashboard()
+ ↓
+dashboard.json
+```
+
+Diagram pokazuje pełną ścieżkę przetwarzania od uruchomienia aplikacji do wygenerowania raportów.
+
+---
+
+# Scenariusze użycia
+
+## Przetwarzanie niewielkiej liczby dokumentów
+
+Przykład:
+
+```text
+10 PDF
+```
+
+Rekomendowana konfiguracja:
+
+```python
+merge_mode="single"
+```
+
+Zalecane dla codziennego przetwarzania niewielkich partii dokumentów. Każdy dokument jest przetwarzany niezależnie i generowany jest osobny plik DOCX.
+
+---
+
+## Przetwarzanie dużej liczby dokumentów
+
+Przykład:
+
+```text
+500 PDF
+```
+
+Rekomendowana konfiguracja:
+
+```python
+workers=4
+merge_mode="single"
+```
+
+Pozwala wykorzystać multiprocessing oraz rozłożyć obciążenie pomiędzy wiele procesów roboczych.
+
+---
+
+## Generowanie raportu zbiorczego
+
+Przykład:
+
+```text
+30 PDF
+ ↓
+1 DOCX
+```
+
+Rekomendowany tryb:
+
+```python
+merge_mode="merged"
+```
+
+Przydatny podczas generowania dokumentacji projektowej, raportów okresowych lub dokumentów archiwalnych.
+
+---
+
+## Archiwizacja dokumentów
+
+Przykład:
+
+```text
+250 PDF
+```
+
+Rekomendowany tryb:
+
+```python
+merge_mode="grouped"
+```
+
+Pozwala podzielić duży zbiór dokumentów na logiczne partie i ograniczyć rozmiar pojedynczych dokumentów DOCX.
+
+---
+
+# Obsługa błędów
+
+W tej sekcji należy umieścić pełny opis mechanizmów obsługi błędów obejmujący:
+
+- walidację dokumentów PDF,
+- obsługę wyjątków w `process_single()`,
+- mechanizm retry,
+- obsługę błędów w `run_merged()`,
+- obsługę błędów w `run_grouped()`,
+- obsługę pustego katalogu wejściowego,
+- logowanie błędów,
+- agregację błędów w metrykach,
+- odporność procesu na błędy.
+
+Zaleca się umieszczenie rozbudowanego rozdziału „Obsługa błędów” jako osobnego rozdziału następującego bezpośrednio po opisie funkcji modułu.
+
+---
+
+# Wydajność
+
+## Multiprocessing
 
 Moduł wykorzystuje:
 
@@ -478,103 +508,110 @@ Domyślna konfiguracja:
 workers = min(cpu_count(), 4)
 ```
 
-Przetwarzanie równoległe wykorzystywane jest wyłącznie w trybie `single`.
+Tryb multiprocessing wykorzystywany jest wyłącznie podczas pracy w trybie:
+
+```python
+merge_mode="single"
+```
+
+## Potencjalne wąskie gardła
+
+Najbardziej kosztowne operacje obejmują:
+
+- analizę dokumentów PDF,
+- ekstrakcję danych z dokumentów wielostronicowych,
+- operacje OCR wykonywane przez moduły podrzędne,
+- zapis dokumentów DOCX,
+- zapis raportów i logów.
+
+## Wpływ liczby workers
+
+Zwiększenie liczby procesów roboczych pozwala skrócić czas przetwarzania dużych zbiorów dokumentów.
+
+Korzyści są największe dla:
+
+- dużej liczby plików PDF,
+- dokumentów wielostronicowych,
+- środowisk wielordzeniowych.
 
 ---
 
-# Dashboard
+# Znane ograniczenia
 
-Po zakończeniu przetwarzania wyświetlane jest podsumowanie:
+Aktualna implementacja posiada następujące ograniczenia:
 
-```text
-=== DASHBOARD ===
-
-PDF total: 120
-OK: 118
-Errors: 2
-
-Tabele: 456
-Poprawne: 441
-
-Quality: 96.71%
-```
-
----
-
-# Raporty
-
-## dashboard.json
-
-Przykład:
-
-```json
-{
-  "total": 120,
-  "ok": 118,
-  "error": 2,
-  "success_rate": 98.33
-}
-```
-
----
-
-# Interfejs CLI
-
-## Parametry
-
-```bash
---input-dir
---template
---output-dir
---workers
---merge-mode
---group-size
-```
-
-## Przykład
-
-```bash
-python3 batch_pipeline.py \
-    --input-dir input \
-    --template templates/szablon.docx \
-    --output-dir output \
-    --workers 4 \
-    --merge-mode single
-```
+- multiprocessing wykorzystywany jest wyłącznie w trybie `single`,
+- moduł obsługuje wyłącznie dokumenty PDF,
+- brak mechanizmu wznowienia procesu po przerwaniu działania aplikacji,
+- plik `dashboard.json` jest nadpisywany przy każdym uruchomieniu,
+- logi są zapisywane do jednego wspólnego pliku `batch.log`,
+- brak dedykowanej kolejki zadań i trwałego mechanizmu restartu przetwarzania.
 
 ---
 
 # Powiązane moduły projektu
 
 - checkpdf_module.md
-- [ableimport.md
-- [PDF to Word Module](pdf2word](metrics.md)
-- [Parallel Pipelinemd
+- [Table Import](tableimport.md)
+- pdf2word_module.md
+- [Metrics](metrics.md)
+- parallel_pipeline.md
 
-## checkpdf_module.py
+## Rola modułów
 
-Odpowiada za analizę i klasyfikację dokumentów PDF.
+### checkpdf_module.py
 
-## tableimport.py
+Analiza i klasyfikacja dokumentów PDF przed rozpoczęciem ekstrakcji.
 
-Realizuje główny pipeline ekstrakcji danych.
+### tableimport.py
 
-## pdf2word_module.py
+Główny pipeline ekstrakcji danych oraz wybór odpowiedniego silnika przetwarzania.
 
-Odpowiada za generowanie dokumentów Microsoft Word.
+### pdf2word_module.py
 
-## metrics.py
+Tworzenie oraz zapis dokumentów Microsoft Word.
 
-Agreguje statystyki oraz generuje dashboard.
+### metrics.py
 
-## parallel_pipeline.py
+Gromadzenie wyników procesu, obliczanie statystyk oraz generowanie danych wykorzystywanych przez dashboard.
 
-Rozszerza możliwości przetwarzania równoległego.
+### parallel_pipeline.py
+
+Rozszerzenia związane z przetwarzaniem równoległym oraz obsługą dużych zbiorów dokumentów.
 
 ---
 
-# Podsumowanie
+# Decyzje architektoniczne
 
-Moduł `batch_pipeline.py` jest centralnym elementem procesu wsadowego przetwarzania dokumentów PDF. Odpowiada za zarządzanie analizą dokumentów, uruchamianie pipeline ekstrakcji danych, generowanie dokumentów DOCX, zbieranie metryk oraz tworzenie raportów końcowych.
+## Separacja odpowiedzialności
 
-Najczęściej wykorzystywanym punktem wejścia jest funkcja `run_batch()`, która umożliwia przetwarzanie całych katalogów PDF w trybie pojedynczym, grupowanym lub scalonym.
+Każdy moduł odpowiada za jeden obszar funkcjonalny:
+
+```text
+checkpdf_module     → analiza PDF
+tableimport         → ekstrakcja danych
+pdf2word_module     → generowanie DOCX
+metrics             → statystyki
+batch_pipeline      → orkiestracja procesu
+```
+
+Takie podejście upraszcza utrzymanie kodu oraz rozwój poszczególnych komponentów.
+
+## Odporność na błędy
+
+Proces został zaprojektowany w sposób umożliwiający kontynuację pracy nawet w przypadku błędów pojedynczych dokumentów.
+
+Błędy:
+
+- nie zatrzymują całego procesu,
+- są raportowane w logach,
+- są uwzględniane w metrykach,
+- są prezentowane w dashboardzie.
+
+## Skalowalność
+
+Architektura umożliwia:
+
+- zwiększanie liczby procesów roboczych,
+- obsługę rosnącej liczby dokumentów,
+- rozszerzanie liczby silników ekstrakcji bez modyfikowania logiki orchestratora.
