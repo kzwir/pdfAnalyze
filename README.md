@@ -1,4 +1,4 @@
-# PDF Table Extraction & Word Report Generator
+# Ekstrakcja tabel z PDF i generowanie dokumentów Word
 
 Automatyczny pipeline do przetwarzania dokumentów PDF, ekstrakcji tabel oraz generowania raportów Microsoft Word (.docx).
 
