@@ -1,4 +1,4 @@
-# Główny Orchestrator PDF → Word
+# Główny moduł przetwarzania PDF → Word.
 
 ## Cel modułu
 
@@ -139,28 +139,6 @@ Po uruchomieniu moduł:
 8. Tworzy podsumowanie.
 9. Wyświetla wyniki w terminalu.
 10. Zapisuje informacje diagnostyczne do logów.
-
----
-
-# Struktura katalogów
-
-Na podstawie kodu można odtworzyć następującą strukturę:
-
-```text
-project/
-│
-├── glowny.py
-├── checkpdf_module.py
-├── tableimport.py
-├── logging_config.py
-│
-├── logs/
-│   └── main.log
-│
-├── input.pdf
-├── szablon.docx
-└── wynik.docx
-```
 
 ---
 
