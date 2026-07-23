@@ -187,28 +187,6 @@ samodzielnie inicjalizuje silnik ekstrakcyjny, pobiera dane z dokumentu PDF oraz
 
 ---
 
-# Struktura katalogów
-
-Możliwa do odtworzenia na podstawie kodu:
-
-```text
-project/
-│
-├── pdf2word_module.py
-│
-├── engines/
-│   ├── pdfplumber_engine.py
-│   ├── camelot_engine.py
-│   └── ocr_engine.py
-│
-├── templates/
-│   └── *.docx
-│
-└── output/
-    └── *.docx*```
-
----
-
 # Model danych
 
 ## Struktura pojedynczego elementu tabeli
