@@ -343,15 +343,18 @@ save_document(
 
 ## Dokumentacja modułów
 
-| Moduł | Opis |
-|--------|--------|
-| batch_pipeline.py | Batch processing |
-| checkpdf_module.py | Analiza PDF |
-| pdf2word_module.py | Generowanie DOCX |
-| tableimport.py | Pipeline i EngineManager |
-| metrics.py | Dashboard i statystyki |
-| parallel_pipeline.py | Multiprocessing |
-| engines/* | Silniki ekstrakcji |
+| Moduł | Opis | Dokumentacja |
+|--------|--------|--------|
+| `batch_pipeline.py` | Batch processing | [batch_pipeline.md](docs/batch_pipeline.md) |
+| `checkpdf_module.py` | Analiza PDF | [checkpdf_module.md](docs/checkpdf_module.md) |
+| `pdf2word_module.py` | Generowanie DOCX | [pdf2word_module.md](docs/pdf2word_module.md) |
+| `tableimport.py` | Pipeline i EngineManager | [tableimport.md](docs/tableimport.md) |
+| `metrics.py` | Dashboard i statystyki | [metrics.md](docs/metrics.md) |
+| `parallel_pipeline.py` | Multiprocessing | [parallel_pipeline.md](docs/parallel_pipeline.md) |
+| `engines/base_engine.py` | Bazowy interfejs silników | [base_engine.md](docs/base_engine.md) |
+| `engines/pdfplumber_engine.py` | Silnik ekstrakcji PDFPlumber | [pdfplumber_engine.md](docs/pdfplumber_engine.md) |
+| `engines/camelot_engine.py` | Silnik ekstrakcji Camelot | [camelot_engine.md](docs/camelot_engine.md) |
+| `engines/ocr_engine.py` | Silnik OCR | [ocr_engine.md](docs/ocr_engine.md) |
 
 ---
 
