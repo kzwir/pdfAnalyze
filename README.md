@@ -197,7 +197,8 @@ project/
 ├── dashboard.json
 ├── batch.log
 │
-└── szablon.docx
+└── templates
+    └── szablon.docx
 ```
 
 ---
